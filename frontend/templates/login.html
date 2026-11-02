@@ -1,128 +1,92 @@
 {% extends 'base.html' %}
 
-{% block title %}INDUSTRIA AI — Secure Industrial Login{% endblock %}
+{% block title %}INDUSTRIA AI — Authentication Gateway{% endblock %}
 
 {% block content %}
 <div class="container py-5 my-auto">
-  <div class="row justify-content-center align-items-center">
-    <div class="col-12 col-md-8 col-lg-5">
-      <div class="card card-industria border-secondary p-4 p-md-5">
-
-        <!-- Branding Header -->
-        <div class="text-center mb-4">
-          <div class="d-inline-flex align-items-center gap-2 mb-2">
-            <span class="brand-badge fs-5 px-3 py-1"><i class="bi bi-cpu-fill"></i> INDUSTRIA</span>
-            <span class="brand-title fs-2">AI</span>
-          </div>
-          <h5 class="fw-bold text-light mb-1">Industrial Knowledge Assistant</h5>
-          <p class="text-muted small">Evidence-grounded maintenance and operation manual intelligence</p>
-        </div>
-
-        <!-- Alert Notification -->
-        <div id="loginAlert" class="alert alert-danger py-2 small d-none" role="alert"></div>
-
-        <!-- Login Form -->
-        <form id="loginForm" onsubmit="handleLogin(event)">
-          {% csrf_token %}
-          <div class="mb-3">
-            <label class="form-label text-muted small fw-semibold">Username</label>
-            <div class="input-group">
-              <span class="input-group-text bg-dark border-secondary text-muted"><i class="bi bi-person"></i></span>
-              <input type="text" id="usernameInput" class="form-control form-control-industria"
-                placeholder="Enter username" required autofocus>
-            </div>
-          </div>
-
-          <div class="mb-4">
-            <label class="form-label text-muted small fw-semibold">Password</label>
-            <div class="input-group">
-              <span class="input-group-text bg-dark border-secondary text-muted"><i class="bi bi-key"></i></span>
-              <input type="password" id="passwordInput" class="form-control form-control-industria"
-                placeholder="Enter password" required>
-            </div>
-          </div>
-
-          <button type="submit" id="loginBtn" class="btn btn-primary-industria w-100 py-2">
-            <i class="bi bi-shield-lock me-1"></i> Sign In to Assistant
-          </button>
-        </form>
-
-        <!-- Quick Demo Role Switcher -->
-        <div class="mt-4 pt-3 border-top border-secondary text-center">
-          <small class="text-muted d-block mb-2"></small>
-          <div class="d-flex justify-content-center gap-2">
-            <button type="button" class="btn btn-sm btn-outline-industria text-info"
-              onclick="fillCreds('engineer', 'Engineer@123456')">
-              <i class="bi bi-tools me-1"></i> Engineer
-            </button>
-            <button type="button" class="btn btn-sm btn-outline-industria text-warning"
-              onclick="fillCreds('admin', 'Admin@123456')">
-              <i class="bi bi-shield-shaded me-1"></i> Admin
-            </button>
-            <button type="button" class="btn btn-sm btn-outline-industria text-purple" style="color: #c084fc;"
-              onclick="fillCreds('supervisor', 'Supervisor@123456')">
-              <i class="bi bi-clipboard-check me-1"></i> Supervisor
-            </button>
-          </div>
-        </div>
-
+  <div class="row justify-content-center text-center mb-4">
+    <div class="col-12 col-md-8">
+      <div class="d-inline-flex align-items-center gap-2 mb-2">
+        <span class="brand-badge fs-4 px-3 py-1"><i class="bi bi-cpu-fill"></i> INDUSTRIA</span>
+        <span class="brand-title fs-2">AI</span>
+      </div>
+      <h3 class="fw-bold text-light mb-1">Industrial Security Gateway</h3>
+      <p class="text-muted small">Select your designated operational portal to access manual intelligence and maintenance systems.</p>
+      <div class="badge bg-dark border border-secondary text-info px-3 py-2 small">
+        <i class="bi bi-shield-check text-success me-1"></i> Multi-Factor Authentication & Role-Based Access Control Enforced
       </div>
     </div>
   </div>
+
+  <div class="row g-4 justify-content-center">
+    <!-- Engineer Portal Card -->
+    <div class="col-12 col-md-4">
+      <div class="card card-industria border-info h-100 p-4 d-flex flex-column justify-content-between hover-card">
+        <div>
+          <div class="d-flex justify-content-between align-items-center mb-3">
+            <span class="badge badge-role-engineer px-3 py-1"><i class="bi bi-tools me-1"></i> Engineer</span>
+            <i class="bi bi-cpu text-info fs-3"></i>
+          </div>
+          <h5 class="fw-bold text-light mb-2">Operations & Maintenance</h5>
+          <p class="text-muted small mb-4">
+            Query isolated technical manuals for AC-90 and HP-200. Inspect operating parameters, alarms, and page-level citations.
+          </p>
+        </div>
+        <div>
+          <a href="/login/engineer/" class="btn btn-primary-industria w-100 py-2">
+            <i class="bi bi-box-arrow-in-right me-1"></i> Engineer Login
+          </a>
+        </div>
+      </div>
+    </div>
+
+    <!-- Supervisor Portal Card -->
+    <div class="col-12 col-md-4">
+      <div class="card card-industria border-secondary h-100 p-4 d-flex flex-column justify-content-between hover-card" style="border-top: 3px solid #c084fc !important;">
+        <div>
+          <div class="d-flex justify-content-between align-items-center mb-3">
+            <span class="badge badge-role-supervisor px-3 py-1"><i class="bi bi-clipboard-check me-1"></i> Supervisor</span>
+            <i class="bi bi-graph-up-arrow text-purple fs-3" style="color: #c084fc;"></i>
+          </div>
+          <h5 class="fw-bold text-light mb-2">Compliance & Audit</h5>
+          <p class="text-muted small mb-4">
+            Audit cross-engineer query histories, analyze documentation knowledge gaps, and mark compliance reviews.
+          </p>
+        </div>
+        <div>
+          <a href="/login/supervisor/" class="btn btn-outline-industria w-100 py-2 text-purple" style="border-color: #c084fc; color: #c084fc;">
+            <i class="bi bi-shield-shaded me-1"></i> Supervisor Login
+          </a>
+        </div>
+      </div>
+    </div>
+
+    <!-- Administrator Portal Card -->
+    <div class="col-12 col-md-4">
+      <div class="card card-industria border-warning h-100 p-4 d-flex flex-column justify-content-between hover-card">
+        <div>
+          <div class="d-flex justify-content-between align-items-center mb-3">
+            <span class="badge badge-role-admin px-3 py-1"><i class="bi bi-shield-lock me-1"></i> Administrator</span>
+            <i class="bi bi-gear-wide-connected text-warning fs-3"></i>
+          </div>
+          <h5 class="fw-bold text-light mb-2">System Administration</h5>
+          <p class="text-muted small mb-4">
+            Register industrial machinery, upload new PDF manuals, manage vector store re-indexing, and review security audit logs.
+          </p>
+        </div>
+        <div>
+          <a href="/login/admin/" class="btn btn-outline-warning w-100 py-2">
+            <i class="bi bi-key me-1"></i> Admin Login
+          </a>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <div class="row justify-content-center mt-5">
+    <div class="col-12 col-md-6 text-center text-muted small">
+      <i class="bi bi-lock me-1"></i> Centralized Django authentication with TOTP multi-factor verification, rate limiting, and brute-force lockout protection.
+    </div>
+  </div>
 </div>
-{% endblock %}
-
-{% block extra_scripts %}
-<script>
-  function fillCreds(u, p) {
-    document.getElementById('usernameInput').value = u;
-    document.getElementById('passwordInput').value = p;
-  }
-
-  async function handleLogin(e) {
-    e.preventDefault();
-    const alertBox = document.getElementById('loginAlert');
-    const loginBtn = document.getElementById('loginBtn');
-    alertBox.classList.add('d-none');
-    loginBtn.disabled = true;
-    loginBtn.innerHTML = '<span class="spinner-border spinner-border-sm me-1"></span> Authenticating...';
-
-    const username = document.getElementById('usernameInput').value.trim();
-    const password = document.getElementById('passwordInput').value;
-
-    try {
-      const resp = await fetch('/api/auth/login/', {
-        method: 'POST',
-        headers: {
-          'X-CSRFToken': csrftoken,
-          'Content-Type': 'application/json'
-        },
-        body: JSON.stringify({ username, password })
-      });
-
-      const data = await resp.json();
-
-      if (resp.ok) {
-        const role = data.user.role;
-        if (role === 'ADMIN') {
-          window.location.href = '/admin-dashboard/';
-        } else if (role === 'SUPERVISOR') {
-          window.location.href = '/supervisor/';
-        } else {
-          window.location.href = '/engineer/';
-        }
-      } else {
-        alertBox.innerText = data.non_field_errors || data.detail || 'Invalid username or password.';
-        alertBox.classList.remove('d-none');
-        loginBtn.disabled = false;
-        loginBtn.innerHTML = '<i class="bi bi-shield-lock me-1"></i> Sign In to Assistant';
-      }
-    } catch (err) {
-      alertBox.innerText = 'Network or server error occurred. Please try again.';
-      alertBox.classList.remove('d-none');
-      loginBtn.disabled = false;
-      loginBtn.innerHTML = '<i class="bi bi-shield-lock me-1"></i> Sign In to Assistant';
-    }
-  }
-</script>
 {% endblock %}

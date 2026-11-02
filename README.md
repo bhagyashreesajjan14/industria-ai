@@ -75,13 +75,44 @@ c:\Users\Bhagyashree\INDUSTRIA AI\.env
 
 ---
 
-## 4. Default User Credentials
+## 4. Strong Authentication, Role Portals & Multi-Factor Authentication (MFA)
 
-| Username | Password | Role | Permissions |
-|---|---|---|---|
-| `admin` | `Admin@123456` | **Administrator** | Register machines, upload manuals, run ingestion, full access |
-| `engineer` | `Engineer@123456` | **Engineer** | Select machines, query manuals, inspect citations, view own history |
-| `supervisor` | `Supervisor@123456` | **Supervisor** | Query manuals, audit all engineer queries, mark reviewed, view knowledge gaps |
+INDUSTRIA AI implements an enterprise-grade authentication architecture meeting strict industrial security standards:
+
+### Dedicated Login Portals
+- **Central Portal Gateway:** `/login/`
+- **Operations & Maintenance Engineer Portal:** `/login/engineer/`
+- **System Administrator Portal:** `/login/admin/`
+- **Compliance & Audit Supervisor Portal:** `/login/supervisor/`
+
+> **Strict Server-Side Role Enforcement:** Logging in with valid credentials at the wrong portal (e.g. an Engineer attempting to authenticate at `/login/admin/`) is immediately rejected with HTTP 403 `PORTAL_ROLE_MISMATCH` and logged to `SecurityAuditLog`.
+
+### Security Hardening Features
+1. **RFC 6238 TOTP Multi-Factor Authentication:**
+   - Pre-integrated with Google Authenticator, Microsoft Authenticator, and standard TOTP apps.
+   - Dynamic in-memory QR code generation (zero temp files on disk).
+   - Single-use SHA-256 hashed backup recovery codes (8 codes generated per user).
+2. **Brute-Force & Enumeration Protection:**
+   - 15-minute temporary lockout after 5 consecutive failed attempts.
+   - Uniform generic error messages (`Invalid username or password.`) to prevent username enumeration.
+3. **Session Hardening & Security Middleware (`MFAGateMiddleware`):**
+   - Blocks any attempt to access `/engineer/`, `/admin-dashboard/`, `/supervisor/`, or `/api/*` without prior TOTP verification.
+   - 8-hour session lifetime (`SESSION_COOKIE_AGE = 28800`).
+   - Session expires automatically on browser close (`SESSION_EXPIRE_AT_BROWSER_CLOSE = True`).
+   - `HttpOnly` and `SameSite=Lax` cookies prevent XSS theft and CSRF abuse.
+   - Session key rotation on authentication (`cycle_key()`) prevents session fixation attacks.
+4. **Zero-Secret Security Audit Logging (`SecurityAuditLog`):**
+   - Tracks 14 distinct security events (login success/failure, lockout, MFA verification/recovery, bypass attempts, logouts).
+   - Sanitizes and purges all passwords, tokens, secret keys, and plaintext recovery codes before database persistence.
+
+### Pre-configured Security Accounts
+Run `python backend/manage.py setup_security_users` to initialize accounts with strong passwords:
+
+| Portal | Username | Strong Password | Role | MFA Status |
+|---|---|---|---|---|
+| `/login/admin/` | `admin` | `Admin@Sec2026!` | **Administrator** | Enrolled (TOTP) |
+| `/login/engineer/` | `engineer` | `Engineer@Sec2026!` | **Engineer** | Enrolled (TOTP) |
+| `/login/supervisor/` | `supervisor` | `Supervisor@Sec2026!` | **Supervisor** | Enrolled (TOTP) |
 
 ---
 
@@ -99,17 +130,24 @@ Run all commands using the project's virtual environment:
 & ".\venv\Scripts\python.exe" backend/manage.py seed_industria
 ```
 
-### Step 3: Run PDF Manual Ingestion
+### Step 3: Initialize Strong Security & MFA Accounts
+```powershell
+& ".\venv\Scripts\python.exe" backend/manage.py setup_security_users
+```
+*(Prints one-time recovery codes and active TOTP secrets for immediate evaluator use).*
+
+### Step 4: Run PDF Manual Ingestion
 ```powershell
 & ".\venv\Scripts\python.exe" backend/manage.py ingest_manuals
 ```
 
-### Step 4: Run Automated Test Suite
+### Step 5: Run Automated Test Suites (All 34 Tests)
 ```powershell
-$env:HF_HUB_OFFLINE='1'; $env:TRANSFORMERS_OFFLINE='1'; & ".\venv\Scripts\python.exe" backend/manage.py test tests.test_industria --verbosity=2
+# Run both Domain RAG Tests and Strong Security Authentication Tests
+& ".\venv\Scripts\python.exe" backend/manage.py test tests.test_industria tests.test_security_auth --verbosity=2
 ```
 
-### Step 5: Start the Web Application
+### Step 6: Start the Web Application
 ```powershell
 & ".\venv\Scripts\python.exe" backend/manage.py runserver 0.0.0.0:8000
 ```

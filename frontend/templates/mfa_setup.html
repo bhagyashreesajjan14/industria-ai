@@ -1,0 +1,194 @@
+{% extends 'base.html' %}
+
+{% block title %}INDUSTRIA AI — Multi-Factor Authentication Setup{% endblock %}
+
+{% block content %}
+<div class="container py-5 my-auto">
+  <div class="row justify-content-center align-items-center">
+    <div class="col-12 col-md-8 col-lg-6">
+      <div class="card card-industria border-info p-4 p-md-5">
+
+        <!-- Setup Step 1 & 2 Container -->
+        <div id="enrollmentSection">
+          <div class="text-center mb-4">
+            <span class="badge bg-primary px-3 py-1 mb-2"><i class="bi bi-shield-plus me-1"></i> MANDATORY SECURITY ENROLLMENT</span>
+            <h4 class="fw-bold text-light mb-1">Set Up Two-Factor Authentication</h4>
+            <p class="text-muted small">Industrial safety and compliance require TOTP multi-factor verification for all roles.</p>
+          </div>
+
+          <div id="setupAlert" class="alert alert-danger py-2 small d-none"></div>
+
+          <!-- Step 1: Scan QR Code -->
+          <div class="p-3 rounded bg-dark border border-secondary mb-4 text-center">
+            <small class="text-info fw-semibold d-block mb-2">Step 1: Scan QR Code with Authenticator App</small>
+            <div id="qrLoading" class="py-4">
+              <div class="spinner-border spinner-border-sm text-info"></div> Loading QR code...
+            </div>
+            <img id="qrCodeImg" src="" alt="MFA QR Code" class="img-fluid rounded p-2 bg-white d-none" style="max-width: 180px;">
+
+            <div class="mt-3">
+              <small class="text-muted d-block">Or enter this secret key manually:</small>
+              <code id="secretKeyText" class="text-info font-monospace fs-6 user-select-all">...</code>
+            </div>
+          </div>
+
+          <!-- Step 2: Verification Code -->
+          <form id="setupForm" onsubmit="handleMFASetup(event)">
+            {% csrf_token %}
+            <div class="mb-4">
+              <label class="form-label text-muted small fw-semibold">Step 2: Enter 6-Digit Code from Authenticator</label>
+              <input type="text" id="setupTokenInput" class="form-control form-control-industria text-center fs-4 font-monospace"
+                     maxlength="6" placeholder="000000" pattern="[0-9]{6}" required style="letter-spacing: 0.4rem;">
+            </div>
+
+            <button type="submit" id="setupBtn" class="btn btn-primary-industria w-100 py-2">
+              <i class="bi bi-shield-check me-1"></i> Verify & Enable MFA
+            </button>
+          </form>
+        </div>
+
+        <!-- Step 3: Backup Recovery Codes Display (shown after activation) -->
+        <div id="recoveryCodesSection" class="d-none">
+          <div class="text-center mb-4">
+            <div class="d-inline-flex p-3 rounded-circle bg-dark border border-success mb-2">
+              <i class="bi bi-check-lg text-success fs-2"></i>
+            </div>
+            <h4 class="fw-bold text-light mb-1">MFA Activated Successfully</h4>
+            <p class="text-warning small mb-0"><i class="bi bi-exclamation-triangle-fill me-1"></i> Save your emergency recovery codes now.</p>
+          </div>
+
+          <div class="alert alert-dark border-secondary small text-muted mb-3">
+            If you ever lose access to your authenticator app, each of these 8 codes can be used <strong>exactly once</strong> to log in. Store them in a secure password manager.
+          </div>
+
+          <div class="p-3 rounded bg-dark border border-secondary mb-3 font-monospace text-center fs-5 text-light" id="recoveryCodesGrid" style="display: grid; grid-template-columns: 1fr 1fr; gap: 8px;">
+            <!-- Generated Codes Injected Here -->
+          </div>
+
+          <div class="d-flex gap-2 mb-4">
+            <button type="button" class="btn btn-sm btn-outline-industria w-50" onclick="copyRecoveryCodes()">
+              <i class="bi bi-clipboard me-1"></i> Copy All
+            </button>
+            <button type="button" class="btn btn-sm btn-outline-industria w-50" onclick="downloadRecoveryCodes()">
+              <i class="bi bi-download me-1"></i> Download .txt
+            </button>
+          </div>
+
+          <button type="button" id="proceedBtn" class="btn btn-success w-100 py-2" onclick="finishEnrollment()">
+            <i class="bi bi-arrow-right-circle me-1"></i> Proceed to Dashboard
+          </button>
+        </div>
+
+      </div>
+    </div>
+  </div>
+</div>
+{% endblock %}
+
+{% block extra_scripts %}
+<script>
+  let generatedCodes = [];
+  let dashboardRedirectUrl = '/';
+
+  document.addEventListener('DOMContentLoaded', () => {
+    loadMFASetupData();
+  });
+
+  async function loadMFASetupData() {
+    try {
+      const resp = await fetch('/api/auth/mfa/setup/');
+      const data = await resp.json();
+
+      if (resp.ok) {
+        document.getElementById('qrLoading').classList.add('d-none');
+        const img = document.getElementById('qrCodeImg');
+        img.src = data.qr_data_uri;
+        img.classList.remove('d-none');
+        document.getElementById('secretKeyText').innerText = data.secret_key;
+      } else {
+        document.getElementById('setupAlert').innerText = data.error || 'Failed to initialize MFA setup.';
+        document.getElementById('setupAlert').classList.remove('d-none');
+      }
+    } catch (e) {
+      document.getElementById('setupAlert').innerText = 'Connection error initializing MFA.';
+      document.getElementById('setupAlert').classList.remove('d-none');
+    }
+  }
+
+  async function handleMFASetup(e) {
+    e.preventDefault();
+    const alertBox = document.getElementById('setupAlert');
+    const setupBtn = document.getElementById('setupBtn');
+    alertBox.classList.add('d-none');
+    setupBtn.disabled = true;
+    setupBtn.innerHTML = '<span class="spinner-border spinner-border-sm me-1"></span> Activating...';
+
+    const token = document.getElementById('setupTokenInput').value.trim();
+
+    try {
+      const resp = await fetch('/api/auth/mfa/setup/', {
+        method: 'POST',
+        headers: {
+          'X-CSRFToken': csrftoken,
+          'Content-Type': 'application/json'
+        },
+        body: JSON.stringify({ token })
+      });
+
+      const data = await resp.json();
+
+      if (resp.ok) {
+        generatedCodes = data.recovery_codes || [];
+        dashboardRedirectUrl = data.redirect_url || '/';
+
+        // Render recovery codes
+        const grid = document.getElementById('recoveryCodesGrid');
+        grid.innerHTML = '';
+        generatedCodes.forEach(code => {
+          grid.innerHTML += `<div class="p-1 bg-black border border-secondary rounded user-select-all">${escapeHtml(code)}</div>`;
+        });
+
+        document.getElementById('enrollmentSection').classList.add('d-none');
+        document.getElementById('recoveryCodesSection').classList.remove('d-none');
+      } else {
+        alertBox.innerText = data.detail || data.error || 'Activation failed.';
+        alertBox.classList.remove('d-none');
+        setupBtn.disabled = false;
+        setupBtn.innerHTML = '<i class="bi bi-shield-check me-1"></i> Verify & Enable MFA';
+      }
+    } catch (err) {
+      alertBox.innerText = 'Unable to reach authentication server.';
+      alertBox.classList.remove('d-none');
+      setupBtn.disabled = false;
+      setupBtn.innerHTML = '<i class="bi bi-shield-check me-1"></i> Verify & Enable MFA';
+    }
+  }
+
+  function copyRecoveryCodes() {
+    navigator.clipboard.writeText(generatedCodes.join('\n'));
+    alert('Recovery codes copied to clipboard.');
+  }
+
+  function downloadRecoveryCodes() {
+    const blob = new Blob([
+      "INDUSTRIA AI — Emergency Recovery Codes\n" +
+      "======================================\n" +
+      "Keep these codes in a secure location. Each code can be used once.\n\n" +
+      generatedCodes.join('\n') + "\n"
+    ], { type: 'text/plain' });
+    const a = document.createElement('a');
+    a.href = URL.createObjectURL(blob);
+    a.download = 'industria_ai_recovery_codes.txt';
+    a.click();
+  }
+
+  function finishEnrollment() {
+    window.location.href = dashboardRedirectUrl;
+  }
+
+  function escapeHtml(text) {
+    if (!text) return '';
+    return text.replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;");
+  }
+</script>
+{% endblock %}
