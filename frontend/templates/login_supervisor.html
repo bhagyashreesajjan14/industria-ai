@@ -84,11 +84,7 @@
       const data = await resp.json();
 
       if (resp.ok) {
-        if (data.mfa_required || data.mfa_setup_required) {
-          window.location.href = data.redirect_url;
-        } else {
-          window.location.href = '/supervisor/';
-        }
+        window.location.href = data.redirect_url || '/supervisor/';
       } else {
         alertBox.innerText = data.detail || data.error || 'Authentication failed.';
         alertBox.classList.remove('d-none');
@@ -104,3 +100,4 @@
   }
 </script>
 {% endblock %}
+

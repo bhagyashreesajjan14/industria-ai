@@ -145,26 +145,25 @@ class LoginView(APIView):
         # Reset failed attempts upon successful password authentication
         user.reset_failed_logins()
 
-        # Check Multi-Factor Authentication requirement
-        mfa, _ = UserMFA.objects.get_or_create(user=user)
+        # Complete Django session authentication
+        login(request, user)
+        request.session.cycle_key()
 
-        # Store pending session credentials (do NOT call login() yet)
-        request.session['mfa_pending_user_id'] = user.id
-        request.session['mfa_portal'] = portal
-        request.session['is_mfa_verified'] = False
+        # Security audit log
+        SecurityAuditLog.log(
+            request=request,
+            event_type=SecurityAuditLog.EventType.LOGIN_SUCCESS,
+            user=user,
+            portal=portal
+        )
 
-        if mfa.is_enabled:
-            return Response({
-                "mfa_required": True,
-                "redirect_url": "/mfa/verify/",
-                "message": "Two-Factor Authentication code required."
-            }, status=status.HTTP_200_OK)
-        else:
-            return Response({
-                "mfa_setup_required": True,
-                "redirect_url": "/mfa/setup/",
-                "message": "Multi-Factor Authentication enrollment required."
-            }, status=status.HTTP_200_OK)
+        redirect_url = get_dashboard_url_for_user(user)
+
+        return Response({
+            "message": "Login successful.",
+            "redirect_url": redirect_url,
+            "user": UserSerializer(user).data
+        }, status=status.HTTP_200_OK)
 
 
 class MFAVerifyView(APIView):
@@ -392,14 +391,12 @@ class LogoutView(APIView):
 
 
 class CurrentUserView(APIView):
-    """Returns profile and MFA status for currently authenticated user."""
+    """Returns profile and role information for currently authenticated user."""
     permission_classes = [permissions.IsAuthenticated]
 
     def get(self, request):
         user = request.user
         data = UserSerializer(user).data
-        data['mfa_enabled'] = hasattr(user, 'mfa') and user.mfa.is_enabled
-        data['is_mfa_verified'] = request.session.get('is_mfa_verified', False)
         return Response(data, status=status.HTTP_200_OK)
 
 

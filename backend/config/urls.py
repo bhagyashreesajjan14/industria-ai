@@ -8,8 +8,6 @@ from .views import (
     admin_login_page,
     engineer_login_page,
     supervisor_login_page,
-    mfa_verify_page,
-    mfa_setup_page,
     engineer_dashboard_page,
     admin_dashboard_page,
     supervisor_dashboard_page
@@ -25,10 +23,6 @@ urlpatterns = [
     path('login/admin/', admin_login_page, name='admin_login_page'),
     path('login/engineer/', engineer_login_page, name='engineer_login_page'),
     path('login/supervisor/', supervisor_login_page, name='supervisor_login_page'),
-
-    # Multi-Factor Authentication Pages
-    path('mfa/verify/', mfa_verify_page, name='mfa_verify_page'),
-    path('mfa/setup/', mfa_setup_page, name='mfa_setup_page'),
 
     # Dashboards
     path('engineer/', engineer_dashboard_page, name='engineer_dashboard_page'),

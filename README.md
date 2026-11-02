@@ -75,9 +75,9 @@ c:\Users\Bhagyashree\INDUSTRIA AI\.env
 
 ---
 
-## 4. Strong Authentication, Role Portals & Multi-Factor Authentication (MFA)
+## 4. Strong Authentication & Dedicated Role Portals (Direct Login)
 
-INDUSTRIA AI implements an enterprise-grade authentication architecture meeting strict industrial security standards:
+INDUSTRIA AI implements an enterprise-grade authentication architecture meeting strict industrial security standards with seamless direct login:
 
 ### Dedicated Login Portals
 - **Central Portal Gateway:** `/login/`
@@ -88,31 +88,32 @@ INDUSTRIA AI implements an enterprise-grade authentication architecture meeting 
 > **Strict Server-Side Role Enforcement:** Logging in with valid credentials at the wrong portal (e.g. an Engineer attempting to authenticate at `/login/admin/`) is immediately rejected with HTTP 403 `PORTAL_ROLE_MISMATCH` and logged to `SecurityAuditLog`.
 
 ### Security Hardening Features
-1. **RFC 6238 TOTP Multi-Factor Authentication:**
-   - Pre-integrated with Google Authenticator, Microsoft Authenticator, and standard TOTP apps.
-   - Dynamic in-memory QR code generation (zero temp files on disk).
-   - Single-use SHA-256 hashed backup recovery codes (8 codes generated per user).
+1. **Direct Role Dashboard Redirection:**
+   - On successful username and password verification, users are authenticated immediately without OTP/MFA barriers and redirected directly to their designated dashboard:
+     - Admin -> `/admin-dashboard/`
+     - Engineer -> `/engineer/`
+     - Supervisor -> `/supervisor/`
 2. **Brute-Force & Enumeration Protection:**
    - 15-minute temporary lockout after 5 consecutive failed attempts.
    - Uniform generic error messages (`Invalid username or password.`) to prevent username enumeration.
-3. **Session Hardening & Security Middleware (`MFAGateMiddleware`):**
-   - Blocks any attempt to access `/engineer/`, `/admin-dashboard/`, `/supervisor/`, or `/api/*` without prior TOTP verification.
+3. **Session Hardening & Security Middleware (`SecurityEnforcementMiddleware`):**
+   - Active account lockout enforcement (terminates sessions for locked accounts).
    - 8-hour session lifetime (`SESSION_COOKIE_AGE = 28800`).
    - Session expires automatically on browser close (`SESSION_EXPIRE_AT_BROWSER_CLOSE = True`).
    - `HttpOnly` and `SameSite=Lax` cookies prevent XSS theft and CSRF abuse.
    - Session key rotation on authentication (`cycle_key()`) prevents session fixation attacks.
 4. **Zero-Secret Security Audit Logging (`SecurityAuditLog`):**
-   - Tracks 14 distinct security events (login success/failure, lockout, MFA verification/recovery, bypass attempts, logouts).
-   - Sanitizes and purges all passwords, tokens, secret keys, and plaintext recovery codes before database persistence.
+   - Tracks security events (login success/failure, lockout, role mismatch, logouts).
+   - Sanitizes and purges all passwords and sensitive information before database persistence.
 
 ### Pre-configured Security Accounts
 Run `python backend/manage.py setup_security_users` to initialize accounts with strong passwords:
 
-| Portal | Username | Strong Password | Role | MFA Status |
+| Portal | Username | Strong Password | Role | Direct Dashboard |
 |---|---|---|---|---|
-| `/login/admin/` | `admin` | `Admin@Sec2026!` | **Administrator** | Enrolled (TOTP) |
-| `/login/engineer/` | `engineer` | `Engineer@Sec2026!` | **Engineer** | Enrolled (TOTP) |
-| `/login/supervisor/` | `supervisor` | `Supervisor@Sec2026!` | **Supervisor** | Enrolled (TOTP) |
+| `/login/admin/` | `admin` | `Admin@Sec2026!` | **Administrator** | `/admin-dashboard/` |
+| `/login/engineer/` | `engineer` | `Engineer@Sec2026!` | **Engineer** | `/engineer/` |
+| `/login/supervisor/` | `supervisor` | `Supervisor@Sec2026!` | **Supervisor** | `/supervisor/` |
 
 ---
 
@@ -130,11 +131,10 @@ Run all commands using the project's virtual environment:
 & ".\venv\Scripts\python.exe" backend/manage.py seed_industria
 ```
 
-### Step 3: Initialize Strong Security & MFA Accounts
+### Step 3: Initialize Strong Security Accounts
 ```powershell
 & ".\venv\Scripts\python.exe" backend/manage.py setup_security_users
 ```
-*(Prints one-time recovery codes and active TOTP secrets for immediate evaluator use).*
 
 ### Step 4: Run PDF Manual Ingestion
 ```powershell

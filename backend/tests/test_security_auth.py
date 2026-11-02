@@ -1,17 +1,18 @@
-import pyotp
-import hashlib
 from django.test import TestCase, Client
-from django.urls import reverse
 from rest_framework import status
-from accounts.models import User, UserMFA, SecurityAuditLog
+from accounts.models import User, SecurityAuditLog
 from machines.models import Machine
-from manuals.models import Manual
 
 
 class SecurityAuthenticationTests(TestCase):
     """
-    Comprehensive Security & Strong Authentication Test Suite
-    Specifically verifies all Round 1 Hackathon security criteria.
+    Comprehensive Security & Direct Authentication Test Suite:
+    - Direct login without MFA/OTP screens for Admin, Engineer, and Supervisor.
+    - Strict server-side role verification for each portal.
+    - Account lockout after 5 consecutive failed attempts.
+    - Username enumeration protection (uniform error message).
+    - Session key cycling and session flush on logout.
+    - Role-based authorization and security audit logging.
     """
 
     def setUp(self):
@@ -26,13 +27,6 @@ class SecurityAuthenticationTests(TestCase):
             is_staff=True,
             is_superuser=True
         )
-        self.admin_mfa = UserMFA.objects.create(
-            user=self.admin,
-            is_enabled=True,
-            secret_key=pyotp.random_base32()
-        )
-        self.admin_recovery_codes = self.admin_mfa.generate_recovery_codes(8)
-        self.admin_mfa.save()
 
         # Create Engineer
         self.engineer = User.objects.create_user(
@@ -41,13 +35,6 @@ class SecurityAuthenticationTests(TestCase):
             password='EngineerPassword123!',
             role=User.Role.ENGINEER
         )
-        self.engineer_mfa = UserMFA.objects.create(
-            user=self.engineer,
-            is_enabled=True,
-            secret_key=pyotp.random_base32()
-        )
-        self.engineer_recovery_codes = self.engineer_mfa.generate_recovery_codes(8)
-        self.engineer_mfa.save()
 
         # Create Supervisor
         self.supervisor = User.objects.create_user(
@@ -56,13 +43,6 @@ class SecurityAuthenticationTests(TestCase):
             password='SupervisorPassword123!',
             role=User.Role.SUPERVISOR
         )
-        self.supervisor_mfa = UserMFA.objects.create(
-            user=self.supervisor,
-            is_enabled=True,
-            secret_key=pyotp.random_base32()
-        )
-        self.supervisor_recovery_codes = self.supervisor_mfa.generate_recovery_codes(8)
-        self.supervisor_mfa.save()
 
         # Test machine for authorization tests
         self.machine = Machine.objects.create(
@@ -72,19 +52,27 @@ class SecurityAuthenticationTests(TestCase):
         )
 
     # =========================================================================
-    # TEST 1: Admin credentials only work on Admin portal
+    # TEST 1: Admin Direct Login and Portal Restrictions
     # =========================================================================
-    def test_01_admin_portal_restrictions(self):
-        # Admin on Admin portal -> Success (MFA prompt)
+    def test_01_admin_direct_login_and_portal_restrictions(self):
+        # Admin on Admin portal -> Direct Success, redirect to /admin-dashboard/
         res = self.client.post('/api/auth/login/', {
             'username': 'admin_sec',
             'password': 'AdminPassword123!',
             'portal': 'ADMIN'
         }, content_type='application/json')
+
         self.assertEqual(res.status_code, status.HTTP_200_OK)
-        self.assertTrue(res.json().get('mfa_required'))
+        self.assertEqual(res.json().get('redirect_url'), '/admin-dashboard/')
+        self.assertNotIn('mfa_required', res.json())
+        self.assertNotIn('mfa_setup_required', res.json())
+
+        # Verify authenticated session can directly access /admin-dashboard/
+        dashboard_res = self.client.get('/admin-dashboard/')
+        self.assertEqual(dashboard_res.status_code, status.HTTP_200_OK)
 
         # Admin attempting Engineer portal -> 403 Forbidden
+        self.client.logout()
         res_eng = self.client.post('/api/auth/login/', {
             'username': 'admin_sec',
             'password': 'AdminPassword123!',
@@ -103,19 +91,27 @@ class SecurityAuthenticationTests(TestCase):
         self.assertEqual(res_sup.json().get('error'), 'PORTAL_ROLE_MISMATCH')
 
     # =========================================================================
-    # TEST 2: Engineer credentials only work on Engineer portal
+    # TEST 2: Engineer Direct Login and Portal Restrictions
     # =========================================================================
-    def test_02_engineer_portal_restrictions(self):
-        # Engineer on Engineer portal -> Success
+    def test_02_engineer_direct_login_and_portal_restrictions(self):
+        # Engineer on Engineer portal -> Direct Success, redirect to /engineer/
         res = self.client.post('/api/auth/login/', {
             'username': 'engineer_sec',
             'password': 'EngineerPassword123!',
             'portal': 'ENGINEER'
         }, content_type='application/json')
+
         self.assertEqual(res.status_code, status.HTTP_200_OK)
-        self.assertTrue(res.json().get('mfa_required'))
+        self.assertEqual(res.json().get('redirect_url'), '/engineer/')
+        self.assertNotIn('mfa_required', res.json())
+        self.assertNotIn('mfa_setup_required', res.json())
+
+        # Verify authenticated session can directly access /engineer/
+        dashboard_res = self.client.get('/engineer/')
+        self.assertEqual(dashboard_res.status_code, status.HTTP_200_OK)
 
         # Engineer attempting Admin portal -> 403 Forbidden
+        self.client.logout()
         res_admin = self.client.post('/api/auth/login/', {
             'username': 'engineer_sec',
             'password': 'EngineerPassword123!',
@@ -134,19 +130,27 @@ class SecurityAuthenticationTests(TestCase):
         self.assertEqual(res_sup.json().get('error'), 'PORTAL_ROLE_MISMATCH')
 
     # =========================================================================
-    # TEST 3: Supervisor credentials only work on Supervisor portal
+    # TEST 3: Supervisor Direct Login and Portal Restrictions
     # =========================================================================
-    def test_03_supervisor_portal_restrictions(self):
-        # Supervisor on Supervisor portal -> Success
+    def test_03_supervisor_direct_login_and_portal_restrictions(self):
+        # Supervisor on Supervisor portal -> Direct Success, redirect to /supervisor/
         res = self.client.post('/api/auth/login/', {
             'username': 'supervisor_sec',
             'password': 'SupervisorPassword123!',
             'portal': 'SUPERVISOR'
         }, content_type='application/json')
+
         self.assertEqual(res.status_code, status.HTTP_200_OK)
-        self.assertTrue(res.json().get('mfa_required'))
+        self.assertEqual(res.json().get('redirect_url'), '/supervisor/')
+        self.assertNotIn('mfa_required', res.json())
+        self.assertNotIn('mfa_setup_required', res.json())
+
+        # Verify authenticated session can directly access /supervisor/
+        dashboard_res = self.client.get('/supervisor/')
+        self.assertEqual(dashboard_res.status_code, status.HTTP_200_OK)
 
         # Supervisor attempting Admin portal -> 403 Forbidden
+        self.client.logout()
         res_admin = self.client.post('/api/auth/login/', {
             'username': 'supervisor_sec',
             'password': 'SupervisorPassword123!',
@@ -165,7 +169,7 @@ class SecurityAuthenticationTests(TestCase):
         self.assertEqual(res_eng.json().get('error'), 'PORTAL_ROLE_MISMATCH')
 
     # =========================================================================
-    # TEST 4: Invalid passwords return generic HTTP 401 error (no username enumeration)
+    # TEST 4: Invalid Passwords Return Generic HTTP 401 Error
     # =========================================================================
     def test_04_invalid_credentials_generic_message(self):
         # Non-existent user
@@ -186,11 +190,11 @@ class SecurityAuthenticationTests(TestCase):
         self.assertEqual(res_wrongpass.status_code, status.HTTP_401_UNAUTHORIZED)
         self.assertEqual(res_wrongpass.json().get('detail'), 'Invalid username or password.')
 
-        # Messages must be identical to prevent enumeration
+        # Messages must be identical to prevent username enumeration
         self.assertEqual(res_nonexistent.json()['detail'], res_wrongpass.json()['detail'])
 
     # =========================================================================
-    # TEST 5: Account lockout after 5 consecutive failed attempts
+    # TEST 5: Account Lockout After 5 Consecutive Failed Attempts
     # =========================================================================
     def test_05_account_lockout_after_five_failed_attempts(self):
         user = User.objects.create_user(
@@ -211,7 +215,7 @@ class SecurityAuthenticationTests(TestCase):
         self.assertEqual(user.failed_login_attempts, 5)
         self.assertTrue(user.is_locked)
 
-        # 6th attempt should return 403 ACCOUNT_LOCKED, even with CORRECT password
+        # 6th attempt should return 403 ACCOUNT_LOCKED even with CORRECT password
         res_locked = self.client.post('/api/auth/login/', {
             'username': 'lockout_victim',
             'password': 'CorrectPassword123!',
@@ -221,51 +225,15 @@ class SecurityAuthenticationTests(TestCase):
         self.assertEqual(res_locked.json().get('error'), 'ACCOUNT_LOCKED')
 
     # =========================================================================
-    # TEST 6: MFA required before dashboard access
+    # TEST 6: Engineer Cannot Access Admin Dashboard or Endpoints
     # =========================================================================
-    def test_06_mfa_required_before_dashboard(self):
-        login_res = self.client.post('/api/auth/login/', {
-            'username': 'engineer_sec',
-            'password': 'EngineerPassword123!',
-            'portal': 'ENGINEER'
-        }, content_type='application/json')
-        self.assertEqual(login_res.status_code, status.HTTP_200_OK)
-        self.assertTrue(login_res.json().get('mfa_required'))
-
-        # Verify session holds pending user ID, but is_mfa_verified is False
-        session = self.client.session
-        self.assertEqual(session.get('mfa_pending_user_id'), self.engineer.id)
-        self.assertFalse(session.get('is_mfa_verified', False))
-
-    # =========================================================================
-    # TEST 7: Direct URL access without is_mfa_verified blocked by middleware
-    # =========================================================================
-    def test_07_mfa_gate_middleware_blocks_direct_access(self):
-        # Force login the user without setting is_mfa_verified
+    def test_06_engineer_cannot_access_admin_dashboard_or_endpoints(self):
         self.client.force_login(self.engineer)
-        # Verify without setting session['is_mfa_verified']
-        session = self.client.session
-        session['is_mfa_verified'] = False
-        session.save()
 
-        # HTML Dashboard request must redirect to /mfa/verify/
-        page_res = self.client.get('/engineer/')
+        # Engineer accessing /admin-dashboard/ redirects to /engineer/
+        page_res = self.client.get('/admin-dashboard/')
         self.assertEqual(page_res.status_code, status.HTTP_302_FOUND)
-        self.assertTrue(page_res.url.startswith('/mfa/verify/'))
-
-        # API request must return 403 Forbidden with MFA_REQUIRED error code
-        api_res = self.client.get('/api/machines/')
-        self.assertEqual(api_res.status_code, status.HTTP_403_FORBIDDEN)
-        self.assertEqual(api_res.json().get('error'), 'MFA_REQUIRED')
-
-    # =========================================================================
-    # TEST 8: Engineer cannot access Admin endpoints
-    # =========================================================================
-    def test_08_engineer_cannot_access_admin_endpoints(self):
-        self.client.force_login(self.engineer)
-        session = self.client.session
-        session['is_mfa_verified'] = True
-        session.save()
+        self.assertEqual(page_res.url, '/engineer/')
 
         # Engineer cannot upload manuals
         res = self.client.post('/api/manuals/upload/', {
@@ -274,18 +242,15 @@ class SecurityAuthenticationTests(TestCase):
         })
         self.assertEqual(res.status_code, status.HTTP_403_FORBIDDEN)
 
-        # Engineer cannot access audit logs
+        # Engineer cannot access security audit logs
         res_logs = self.client.get('/api/auth/audit-logs/')
         self.assertEqual(res_logs.status_code, status.HTTP_403_FORBIDDEN)
 
     # =========================================================================
-    # TEST 9: Supervisor cannot upload manuals
+    # TEST 7: Supervisor Cannot Upload Manuals
     # =========================================================================
-    def test_09_supervisor_cannot_upload_manuals(self):
+    def test_07_supervisor_cannot_upload_manuals(self):
         self.client.force_login(self.supervisor)
-        session = self.client.session
-        session['is_mfa_verified'] = True
-        session.save()
 
         res = self.client.post('/api/manuals/upload/', {
             'machine_id': 'M-TEST1',
@@ -294,12 +259,12 @@ class SecurityAuthenticationTests(TestCase):
         self.assertEqual(res.status_code, status.HTTP_403_FORBIDDEN)
 
     # =========================================================================
-    # TEST 10: Unauthenticated requests are rejected
+    # TEST 8: Unauthenticated Requests Are Rejected
     # =========================================================================
-    def test_10_unauthenticated_requests_rejected(self):
+    def test_08_unauthenticated_requests_rejected(self):
         self.client.logout()
 
-        # Protected API rejected with 401 Unauthorized or 403 Forbidden
+        # Protected API rejected with 401/403
         res_api = self.client.get('/api/machines/')
         self.assertIn(res_api.status_code, [status.HTTP_401_UNAUTHORIZED, status.HTTP_403_FORBIDDEN])
 
@@ -309,62 +274,25 @@ class SecurityAuthenticationTests(TestCase):
         self.assertTrue('/login/' in res_page.url)
 
     # =========================================================================
-    # TEST 11: Logout clears session and resets MFA verification state
+    # TEST 9: Logout Clears Session Completely
     # =========================================================================
-    def test_11_logout_clears_session_completely(self):
+    def test_09_logout_clears_session_completely(self):
         self.client.force_login(self.engineer)
-        session = self.client.session
-        session['is_mfa_verified'] = True
-        session.save()
 
         logout_res = self.client.post('/api/auth/logout/')
         self.assertEqual(logout_res.status_code, status.HTTP_200_OK)
 
         # Session should be flushed
-        self.assertFalse(self.client.session.get('is_mfa_verified', False))
         self.assertIsNone(self.client.session.get('_auth_user_id'))
 
-        # Subsequent protected API request must fail (401 or 403)
+        # Subsequent protected API request must fail
         subsequent_res = self.client.get('/api/machines/')
         self.assertIn(subsequent_res.status_code, [status.HTTP_401_UNAUTHORIZED, status.HTTP_403_FORBIDDEN])
 
     # =========================================================================
-    # TEST 12: Recovery codes work and are single-use only
+    # TEST 10: SecurityAuditLog Records Events Without Leaking Passwords
     # =========================================================================
-    def test_12_mfa_single_use_recovery_codes(self):
-        code_to_use = self.engineer_recovery_codes[0]
-
-        # Stage session
-        session = self.client.session
-        session['mfa_pending_user_id'] = self.engineer.id
-        session['is_mfa_verified'] = False
-        session.save()
-
-        # 1st use -> Accepted
-        res = self.client.post('/api/auth/mfa/verify/', {
-            'recovery_code': code_to_use
-        }, content_type='application/json')
-        self.assertEqual(res.status_code, status.HTTP_200_OK)
-        self.assertTrue(self.client.session.get('is_mfa_verified'))
-
-        # Logout and stage session again to re-attempt using the same recovery code
-        self.client.logout()
-        session = self.client.session
-        session['mfa_pending_user_id'] = self.engineer.id
-        session['is_mfa_verified'] = False
-        session.save()
-
-        # 2nd use -> Rejected (Already used)
-        res_reuse = self.client.post('/api/auth/mfa/verify/', {
-            'recovery_code': code_to_use
-        }, content_type='application/json')
-        self.assertEqual(res_reuse.status_code, status.HTTP_400_BAD_REQUEST)
-        self.assertEqual(res_reuse.json().get('error'), 'INVALID_RECOVERY_CODE')
-
-    # =========================================================================
-    # TEST 13: SecurityAuditLog records events without storing sensitive secrets
-    # =========================================================================
-    def test_13_audit_logging_no_sensitive_secrets(self):
+    def test_10_audit_logging_no_sensitive_secrets(self):
         initial_log_count = SecurityAuditLog.objects.count()
 
         # Trigger login failure
@@ -381,8 +309,71 @@ class SecurityAuthenticationTests(TestCase):
         self.assertEqual(latest_log.event_type, SecurityAuditLog.EventType.LOGIN_FAILED)
         self.assertEqual(latest_log.username_attempted, 'engineer_sec')
 
-        # Verify absolutely NO plaintext password or token appears in details
+        # Verify absolutely NO plaintext password appears in details
         self.assertNotIn('BadPassword999!', str(latest_log.details))
         self.assertNotIn('password', latest_log.details)
-        self.assertNotIn('secret', latest_log.details)
-        self.assertNotIn('token', latest_log.details)
+
+    # =========================================================================
+    # TEST 11: Session Fixation Protection via Session Key Rotation
+    # =========================================================================
+    def test_11_session_key_rotation_on_login(self):
+        # Initial session
+        self.client.get('/login/')
+        initial_session_key = self.client.session.session_key
+
+        # Perform login
+        self.client.post('/api/auth/login/', {
+            'username': 'engineer_sec',
+            'password': 'EngineerPassword123!',
+            'portal': 'ENGINEER'
+        }, content_type='application/json')
+
+        new_session_key = self.client.session.session_key
+        # Key must change to prevent session fixation
+        self.assertNotEqual(initial_session_key, new_session_key)
+
+    # =========================================================================
+    # TEST 12: Locked User Cannot Access Authenticated Pages Via Middleware
+    # =========================================================================
+    def test_12_locked_user_session_terminated_by_middleware(self):
+        self.client.force_login(self.engineer)
+        # Lock user
+        self.engineer.record_failed_login(max_attempts=1, lockout_minutes=15)
+        self.assertTrue(self.engineer.is_locked)
+
+        # Middleware intercepts and redirects to /login/?error=locked
+        page_res = self.client.get('/engineer/')
+        self.assertEqual(page_res.status_code, status.HTTP_302_FOUND)
+        self.assertTrue('/login/?error=locked' in page_res.url)
+
+    # =========================================================================
+    # TEST 13: Central Portal Gateway Login Flows
+    # =========================================================================
+    def test_13_central_login_redirect_flows(self):
+        # Admin via central portal
+        res_admin = self.client.post('/api/auth/login/', {
+            'username': 'admin_sec',
+            'password': 'AdminPassword123!'
+        }, content_type='application/json')
+        self.assertEqual(res_admin.status_code, status.HTTP_200_OK)
+        self.assertEqual(res_admin.json().get('redirect_url'), '/admin-dashboard/')
+
+        self.client.logout()
+
+        # Engineer via central portal
+        res_eng = self.client.post('/api/auth/login/', {
+            'username': 'engineer_sec',
+            'password': 'EngineerPassword123!'
+        }, content_type='application/json')
+        self.assertEqual(res_eng.status_code, status.HTTP_200_OK)
+        self.assertEqual(res_eng.json().get('redirect_url'), '/engineer/')
+
+        self.client.logout()
+
+        # Supervisor via central portal
+        res_sup = self.client.post('/api/auth/login/', {
+            'username': 'supervisor_sec',
+            'password': 'SupervisorPassword123!'
+        }, content_type='application/json')
+        self.assertEqual(res_sup.status_code, status.HTTP_200_OK)
+        self.assertEqual(res_sup.json().get('redirect_url'), '/supervisor/')
